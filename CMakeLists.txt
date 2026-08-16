@@ -11,7 +11,7 @@ if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
     )
 endif()
 
-project(CPPApplicationTemplate
+project(CppBundler
     VERSION 0.1.0.0
     LANGUAGES CXX C
 )
@@ -43,7 +43,7 @@ option(ENABLE_IPO "Enable interprocedural optimization (LTO) in optimized config
 
 # Project-scoped configuration. Defined unconditionally, because our own targets read it.
 set(EXECUTABLE_NAME ${PROJECT_NAME} CACHE STRING "The name of the outputted application's executable.")
-set(WIN32_APP_DESCRIPTION "A template for a C++ application." CACHE STRING "A Win32-specific description field for the application.")
+set(WIN32_APP_DESCRIPTION "A tool to bundle multi-file C++ source(s), similar to bundling JS/TS files." CACHE STRING "A Win32-specific description field for the application.")
 set(WIN32_APP_COMMENTS "" CACHE STRING "A Win32-specific comment field for the application.")
 
 # === C++ Configuration ===

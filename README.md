@@ -1,7 +1,6 @@
-# C++ Application Template
+# CppBundler
 
-A batteries-included starting point for native C++ applications: CMake + vcpkg manifest
-mode + Ninja, with tests, packaging, Windows resource metadata and CI already wired up.
+A tool to bundle multi-file C++ source(s), similar to bundling JS/TS files.
 
 ---
 
@@ -111,46 +110,6 @@ cmake --build --preset ninja-release --compile-no-warning-as-error
 
 Re-configuring installs it. Version resolution is pinned by `builtin-baseline`; bump that
 SHA to move dependencies forward deliberately rather than by accident.
-
----
-
-## Bootstrapping a new project
-
-Clone the template, then:
-
-```powershell
-./BOOTSTRAP_TEMPLATE.ps1 -ProjectName MyCoolApp -Description "Does a cool thing."
-```
-
-That rewrites the CMake project name and version, the vcpkg manifest identity, the Win32
-resource description, the `LICENSE` copyright line and this README; swaps the example
-sources for stubs; clears generated output; and deletes itself.
-
-| Flag | Effect |
-|---|---|
-| `-ExecutableName` | Binary name, when it should differ from the project name |
-| `-PackageName` | vcpkg port name. Derived as kebab-case from the project name by default |
-| `-Version` | Three-component version, default `0.1.0` |
-| `-Author` | `LICENSE` copyright holder |
-| `-KeepExample` | Keep `src/app.*` and `tests/test_app.cpp` |
-| `-ResetGit` | Delete `.git` and start fresh history (prompts unless `-Force`) |
-| `-KeepScript` | Don't self-delete |
-| `-WhatIf` | Dry run: print every change, touch nothing |
-
-Then replace `assets/AppIcon.ico` with your own.
-
-The script refuses to run twice — it aborts if `CMakeLists.txt` no longer names the
-template, so it can't corrupt a project that's already been bootstrapped.
-
-### Doing it by hand
-
-`project()` in `CMakeLists.txt`, `name`/`version`/`description` in `vcpkg.json`,
-`WIN32_APP_DESCRIPTION`'s default, `LICENSE`, and this file.
-
-Deleting the example `src/app.*` is safe — CMake substitutes a generated placeholder source
-so the core library stays valid until you add your own. `tests/` is different: it globs its
-sources, so it needs at least one file *and* at least one `TEST_CASE`, or configure fails on
-a target with no sources and CTest errors on an empty suite (`noTestsAction: error`).
 
 ---
 
