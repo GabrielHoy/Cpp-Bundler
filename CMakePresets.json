@@ -1,0 +1,206 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "ninja-base",
+            "displayName": "Ninja Base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "installDir": "${sourceDir}/install/${presetName}",
+            "cacheVariables": {
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "VCPKG_INSTALLED_DIR": "${sourceDir}/vcpkg_installed",
+                "VCPKG_MANIFEST_FEATURES": "tests"
+            }
+        },
+        {
+            "name": "clang-cl-base",
+            "displayName": "Clang-CL Base",
+            "hidden": true,
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_CXX_COMPILER": "clang-cl",
+                "CMAKE_C_COMPILER": "clang-cl"
+            }
+        },
+        {
+            "name": "ninja-debug",
+            "displayName": "Debug (Ninja)",
+            "inherits": "ninja-base",
+            "description": "Debug build utilizing Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "ninja-release",
+            "displayName": "Release (Ninja)",
+            "inherits": "ninja-base",
+            "description": "Release build utilizing Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "ninja-debug-clang-cl",
+            "displayName": "Debug (Ninja & Clang-CL)",
+            "inherits": [
+                "clang-cl-base",
+                "ninja-debug"
+            ],
+            "description": "Debug build utilizing Ninja & Clang-CL"
+        },
+        {
+            "name": "ninja-release-clang-cl",
+            "displayName": "Release (Ninja & Clang-CL)",
+            "inherits": [
+                "clang-cl-base",
+                "ninja-release"
+            ],
+            "description": "Release build utilizing Ninja & Clang-CL"
+        },
+        {
+            "name": "ninja-asan",
+            "displayName": "ASan (Ninja & MSVC)",
+            "inherits": "ninja-base",
+            "description": "Debug build instrumented with AddressSanitizer. Deliberately MSVC rather than clang-cl: clang-cl's ASan cannot link the debug CRT (/MDd), and switching to the release CRT would mismatch vcpkg's debug-built dependencies.",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_ASAN": "ON",
+                "ENABLE_IPO": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "ninja-debug",
+            "configurePreset": "ninja-debug"
+        },
+        {
+            "name": "ninja-release",
+            "configurePreset": "ninja-release"
+        },
+        {
+            "name": "ninja-debug-clang-cl",
+            "configurePreset": "ninja-debug-clang-cl"
+        },
+        {
+            "name": "ninja-release-clang-cl",
+            "configurePreset": "ninja-release-clang-cl"
+        },
+        {
+            "name": "ninja-asan",
+            "configurePreset": "ninja-asan"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "test-base",
+            "hidden": true,
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "noTestsAction": "error",
+                "stopOnFailure": false
+            }
+        },
+        {
+            "name": "ninja-debug",
+            "configurePreset": "ninja-debug",
+            "inherits": "test-base"
+        },
+        {
+            "name": "ninja-release",
+            "configurePreset": "ninja-release",
+            "inherits": "test-base"
+        },
+        {
+            "name": "ninja-debug-clang-cl",
+            "configurePreset": "ninja-debug-clang-cl",
+            "inherits": "test-base"
+        },
+        {
+            "name": "ninja-release-clang-cl",
+            "configurePreset": "ninja-release-clang-cl",
+            "inherits": "test-base"
+        },
+        {
+            "name": "ninja-asan",
+            "configurePreset": "ninja-asan",
+            "inherits": "test-base"
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "ninja-release",
+            "configurePreset": "ninja-release",
+            "packageDirectory": "${sourceDir}/dist"
+        },
+        {
+            "name": "ninja-release-clang-cl",
+            "configurePreset": "ninja-release-clang-cl",
+            "packageDirectory": "${sourceDir}/dist"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "ninja-debug",
+            "displayName": "Debug: configure, build & test",
+            "steps": [
+                { "type": "configure", "name": "ninja-debug" },
+                { "type": "build", "name": "ninja-debug" },
+                { "type": "test", "name": "ninja-debug" }
+            ]
+        },
+        {
+            "name": "ninja-release",
+            "displayName": "Release: configure, build, test & package",
+            "steps": [
+                { "type": "configure", "name": "ninja-release" },
+                { "type": "build", "name": "ninja-release" },
+                { "type": "test", "name": "ninja-release" },
+                { "type": "package", "name": "ninja-release" }
+            ]
+        },
+        {
+            "name": "ninja-debug-clang-cl",
+            "displayName": "Debug (Clang-CL): configure, build & test",
+            "steps": [
+                { "type": "configure", "name": "ninja-debug-clang-cl" },
+                { "type": "build", "name": "ninja-debug-clang-cl" },
+                { "type": "test", "name": "ninja-debug-clang-cl" }
+            ]
+        },
+        {
+            "name": "ninja-release-clang-cl",
+            "displayName": "Release (Clang-CL): configure, build, test & package",
+            "steps": [
+                { "type": "configure", "name": "ninja-release-clang-cl" },
+                { "type": "build", "name": "ninja-release-clang-cl" },
+                { "type": "test", "name": "ninja-release-clang-cl" },
+                { "type": "package", "name": "ninja-release-clang-cl" }
+            ]
+        },
+        {
+            "name": "ninja-asan",
+            "displayName": "ASan: configure, build & test",
+            "steps": [
+                { "type": "configure", "name": "ninja-asan" },
+                { "type": "build", "name": "ninja-asan" },
+                { "type": "test", "name": "ninja-asan" }
+            ]
+        }
+    ]
+}

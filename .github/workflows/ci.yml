@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch supersedes any run still in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Don't let one broken toolchain hide the results from the others.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows / MSVC / Debug
+            os: windows-latest
+            preset: ninja-debug
+          - name: Windows / MSVC / Release
+            os: windows-latest
+            preset: ninja-release
+          - name: Windows / clang-cl / Release
+            os: windows-latest
+            preset: ninja-release-clang-cl
+          - name: Linux / GCC / Release
+            os: ubuntu-latest
+            preset: ninja-release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Supplies a current CMake *and* Ninja; the runner images do not guarantee Ninja.
+      - name: Install CMake and Ninja
+        uses: lukka/get-cmake@latest
+
+      # Puts cl.exe, the Windows SDK and the MSVC libs on PATH so the Ninja generator can
+      # find them. Also required for clang-cl, which links against the MSVC runtime.
+      - name: Set up MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # The runner images ship a vcpkg clone; builtin-baseline in vcpkg.json pins the port
+      # versions, so which clone we use has no effect on what gets built.
+      - name: Point VCPKG_ROOT at the preinstalled vcpkg
+        shell: bash
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          mkdir -p "${{ github.workspace }}/vcpkg_cache"
+          echo "VCPKG_DEFAULT_BINARY_CACHE=${{ github.workspace }}/vcpkg_cache" >> "$GITHUB_ENV"
+
+      # Caches compiled *ports*, not objects. Turns a cold dependency build into a copy.
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-${{ matrix.os }}-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ matrix.os }}-${{ matrix.preset }}-
+            vcpkg-${{ matrix.os }}-
+
+      # One command covers configure -> build -> test (-> package for release presets),
+      # which keeps CI and local development on exactly the same code path.
+      - name: Configure, build and test
+        run: cmake --workflow --preset ${{ matrix.preset }}
+
+      - name: Upload package
+        if: matrix.preset == 'ninja-release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: ignore
+
+  format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installed from PyPI because the runner images ship an older clang-format than
+      # .clang-format requires: WrapNamespaceBodyWithEmptyLines, BinPackParameters:
+      # OnePerLine and ReflowComments: Always all arrived in clang-format 20, and older
+      # binaries reject the config file outright.
+      #
+      # Constrained to one major version rather than an exact pin: formatting output is
+      # stable within a major release but does drift across them. Keep this in sync with
+      # the clang-format you run locally, or CI will disagree with your editor.
+      - name: Install clang-format
+        run: pipx install "clang-format~=22.1"
+
+      - name: Check formatting
+        run: |
+          find src tests \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
+            | xargs -0 --no-run-if-empty clang-format --dry-run --Werror

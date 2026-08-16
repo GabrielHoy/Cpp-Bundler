@@ -1,0 +1,16 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "name": "cpp-application-template",
+    "version": "0.1.0",
+    "description": "A C++ application template.",
+    "builtin-baseline": "4e82e29f14eac2b3422f18f72c7524d04f19924e",
+    "dependencies": [],
+    "features": {
+        "tests": {
+            "description": "Dependencies required to build the test suite",
+            "dependencies": [
+                "catch2"
+            ]
+        }
+    }
+}

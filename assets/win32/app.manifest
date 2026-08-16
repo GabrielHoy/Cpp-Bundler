@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+
+  <!--
+    The <compatibility> block is not decoration: Windows gates several manifest settings
+    (activeCodePage and the 2016+ dpiAwareness key among them) behind an explicit
+    declaration that the binary was tested against that OS version. Drop this block and
+    the <windowsSettings> below silently stop applying.
+  -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 / 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+      <!-- Windows 8 -->
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
+      <!-- Windows 7 -->
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+    </application>
+  </compatibility>
+
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!--
+        Makes the *A (ANSI) Win32 APIs and the CRT's narrow-char paths use UTF-8 instead of
+        the machine's legacy code page. Requires Windows 10 1903+. This is what lets
+        std::filesystem::path, fopen(), and friends round-trip non-ASCII paths correctly
+        without rewriting everything against the *W APIs.
+      -->
+      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
+
+      <!--
+        Opts out of the MAX_PATH (260 character) limit for the Win32 file APIs. Also
+        requires the machine-wide policy
+        HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1.
+      -->
+      <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
+
+      <!--
+        Per-Monitor V2 DPI awareness. Without this, Windows bitmap-stretches the window on
+        high-DPI displays and everything looks blurry. Both keys are present because the
+        2005 key is the fallback for OS versions that do not understand the 2016 one.
+      -->
+      <dpiAware    xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2, PerMonitor</dpiAwareness>
+
+      <!-- Opt in to the segment heap, which lowers memory footprint on Windows 10 2004+. -->
+      <heapType xmlns="http://schemas.microsoft.com/SMI/2020/WindowsSettings">SegmentHeap</heapType>
+    </windowsSettings>
+  </application>
+
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <!--
+          asInvoker is deliberate: it suppresses the installer-detection heuristic that
+          would otherwise throw a UAC prompt at any executable whose name contains
+          "setup", "install", "update", or "patch".
+        -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+</assembly>

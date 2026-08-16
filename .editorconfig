@@ -1,0 +1,20 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
+root = true
+
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+charset = utf-8
+trim_trailing_whitespace = false
+insert_final_newline = false
+
+# Must stay LF: shells reject CRLF scripts and Actions workflows run on Linux.
+# Kept in sync with .gitattributes.
+[*.{sh,bash,yml,yaml}]
+end_of_line = lf
+
+[*.{json,yml,yaml}]
+indent_size = 2

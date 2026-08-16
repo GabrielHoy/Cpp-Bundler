@@ -1,0 +1,4 @@
+{
+    "cmake.useVsDeveloperEnvironment": "always",
+    "editor.formatOnSave": true
+}

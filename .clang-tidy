@@ -1,0 +1,60 @@
+# Provides editor diagnostics for clangd.
+#
+# Standalone runs need a VS developer environment: the MSVC/SDK include paths
+# reach clangd via %LOCALAPPDATA%\clangd\config.yaml, which clang-tidy does not
+# read. From an "x64 Native Tools Command Prompt for VS":
+#
+#   clang-tidy -p build/ninja-debug \
+#     --extra-arg=-Wno-unused-command-line-argument src/*.cpp
+#
+# The --extra-arg is required because the build's /WX promotes clang-cl's
+# "unused argument '/Zc:preprocessor'" (an MSVC flag clang-cl ignores) to an
+# error, which aborts the run. clangd drops that diagnostic on its own.
+---
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -misc-non-private-member-variables-in-classes,
+  -modernize-use-trailing-return-type,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -portability-avoid-pragma-once
+
+# Warnings from third-party headers generally aren't actionable, try to only 'diagnose' in-house code.
+HeaderFilterRegex: '^.*[/\\]src[/\\].*'
+
+# Editor diagnostics only. CI enforcement is opt-in; once codebase is clean this can be set from '' to '*'
+WarningsAsErrors: ''
+
+CheckOptions:
+  - key:   readability-identifier-naming.NamespaceCase
+    value: Camel_Snake_Case
+  - key:   readability-identifier-naming.ClassCase
+    value: CamelCase
+  - key:   readability-identifier-naming.StructCase
+    value: CamelCase
+  - key:   readability-identifier-naming.EnumCase
+    value: CamelCase
+  - key:   readability-identifier-naming.FunctionCase
+    value: CamelCase
+  - key:   readability-identifier-naming.VariableCase
+    value: camelBack
+#   - key:   readability-identifier-naming.PrivateMemberPrefix
+#     value: _
+#   - key:   readability-identifier-naming.PrivateMemberSuffix
+#     value: _
+  - key:   readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+  - key:   readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE

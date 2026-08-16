@@ -1,0 +1,29 @@
+# Normalize every text file to LF *in the repository*, regardless of what any given
+# contributor's core.autocrlf happens to be. Without this, line endings depend on each
+# machine's git config and diffs turn into whole-file rewrites.
+* text=auto eol=crlf
+
+# Files that must keep LF in the working tree: shells refuse to run CRLF scripts, and
+# GitHub Actions parses workflow files on Linux runners.
+*.sh            text eol=lf
+*.bash          text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+Makefile        text eol=lf
+.gitattributes  text eol=lf
+
+# Binary assets: never diff, never touch line endings.
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.pdf   binary
+*.zip   binary
+*.exe   binary
+*.dll   binary
+*.lib   binary
+*.pdb   binary
+
+# Keep generated/vendored noise out of PR diffs and language statistics.
+vcpkg_installed/**  linguist-vendored
+build/**            linguist-generated
