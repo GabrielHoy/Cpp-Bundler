@@ -15,6 +15,12 @@ target_link_libraries(${PROJECT_NAME}_tests PRIVATE
 
 # Catch2's config package appends its `extras` directory to CMAKE_MODULE_PATH, which is
 # what makes this include() resolve.
+# The bundler recurses once per level of #include nesting; see the comment on the same
+# option in the top-level CMakeLists.txt.
+if(WIN32 AND MSVC)
+    target_link_options(${PROJECT_NAME}_tests PRIVATE /STACK:8388608)
+endif()
+
 include(Catch)
 
 # Registers every TEST_CASE as an individual CTest test by interrogating the built binary,

@@ -11,10 +11,32 @@ if(CMAKE_TOOLCHAIN_FILE AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
     )
 endif()
 
+# === Static linking ===
+#
+# A bundler is a tool you drop somewhere and run, so it should be one file. Linking the
+# dependencies (and the CRT) statically means no spdlog.dll/fmt.dll next to the exe and no
+# Visual C++ Redistributable on the target machine.
+#
+# This has to be decided *before* project(), because that is where the vcpkg toolchain file
+# runs and reads the triplet; setting it afterwards silently has no effect. CMAKE_HOST_WIN32
+# rather than WIN32 for the same reason -- WIN32 is not defined until project() either.
+option(USE_STATIC_DEPS "Link dependencies and the CRT statically into a single self-contained binary" ON)
+
+if(USE_STATIC_DEPS AND CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_TARGET_TRIPLET "x64-windows-static" CACHE STRING "vcpkg triplet")
+endif()
+
 project(CppBundler
     VERSION 0.1.0.0
     LANGUAGES CXX C
 )
+
+if(VCPKG_TARGET_TRIPLET MATCHES "-static$")
+    # vcpkg's *-static triplets build against the static CRT, so we have to match or the
+    # link fails on duplicate/missing CRT symbols. Honoured via CMP0091, which is NEW at
+    # our cmake_minimum_required.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # === CMake Options ===
 
@@ -42,7 +64,7 @@ option(ENABLE_ASAN "Build with AddressSanitizer instrumentation" OFF)
 option(ENABLE_IPO "Enable interprocedural optimization (LTO) in optimized configs" ON)
 
 # Project-scoped configuration. Defined unconditionally, because our own targets read it.
-set(EXECUTABLE_NAME ${PROJECT_NAME} CACHE STRING "The name of the outputted application's executable.")
+set(EXECUTABLE_NAME "cpp-bundler" CACHE STRING "The name of the outputted application's executable.")
 set(WIN32_APP_DESCRIPTION "A tool to bundle multi-file C++ source(s), similar to bundling JS/TS files." CACHE STRING "A Win32-specific description field for the application.")
 set(WIN32_APP_COMMENTS "" CACHE STRING "A Win32-specific comment field for the application.")
 
@@ -67,7 +89,9 @@ if(USE_SCCACHE)
     endif()
 endif()
 
-# find_package(<LIBRARY_NAME> CONFIG REQUIRED)
+find_package(argparse CONFIG REQUIRED)
+find_package(fmt CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 
 # === Shared compile settings ===
 
@@ -87,6 +111,11 @@ if(MSVC)
         # Conforming preprocessor (__VA_OPT__, correct __VA_ARGS__). clang-cl's is already
         # conforming and rejects the flag as unused.
         $<$<CXX_COMPILER_ID:MSVC>:/Zc:preprocessor>
+        # Private members carry no `m_` prefix (see .clang-tidy), so a local shadowing a
+        # member has to be a compiler error rather than a silent accident. cl.exe reports
+        # that as C4458 at /W4 already; clang-cl's /W4 does not, and needs asking. Not
+        # -Wshadow-all, which would also reject the deliberate `: value(value)` idiom.
+        $<$<CXX_COMPILER_ID:Clang>:-Wshadow>
     )
 else()
     target_compile_options(project_warnings INTERFACE
@@ -149,6 +178,10 @@ target_link_libraries(${PROJECT_NAME}_core PRIVATE project_warnings)
 target_compile_definitions(${PROJECT_NAME}_core PUBLIC
     $<$<CONFIG:Debug>:IS_DEBUG=1>
     $<$<CONFIG:Release>:IS_RELEASE=1>
+    # One source of truth for the strings the CLI reports, so --version cannot drift away
+    # from what CPack and the Win32 resource say.
+    CPP_BUNDLER_NAME="${EXECUTABLE_NAME}"
+    CPP_BUNDLER_VERSION="${PROJECT_VERSION}"
 )
 
 add_executable(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp)
@@ -159,9 +192,24 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     project_warnings
 )
 
-# target_link_libraries(${PROJECT_NAME}_core PUBLIC
-#   #<LIBRARIES TO LINK>
-# )
+# PUBLIC because the headers expose these: spdlog appears in logging.hpp, argparse only in
+# cli.cpp -- but the test target compiles against the same headers, so it needs the same
+# include paths. argparse and spdlog are the two wheels deliberately not reinvented here;
+# the glob engine is hand-written because nothing in vcpkg implements '**' path semantics.
+target_link_libraries(${PROJECT_NAME}_core PUBLIC
+    argparse::argparse
+    fmt::fmt
+    spdlog::spdlog
+)
+
+# The bundler recurses once per level of #include nesting, holding an open stream and a line
+# buffer per frame. Cycle detection bounds the depth by the number of distinct headers, so a
+# large project can legitimately go hundreds of frames deep -- more than Windows' 1 MiB
+# default comfortably allows. Rust's 8 MiB main-thread stack is why the inspiration for
+# this project's repo never had to think about this.
+if(WIN32 AND MSVC)
+    target_link_options(${PROJECT_NAME} PRIVATE /STACK:8388608)
+endif()
 
 if(WIN32)
     # === Windows-specific settings ===
@@ -258,7 +306,7 @@ if(WIN32)
 
     install(RUNTIME_DEPENDENCY_SET app_runtime_deps
         # api-ms-*/ext-ms-* are API sets; everything under System32 is OS-provided. Neither
-        # may be redistributed, and bundling them breaks on other Windows builds.
+        # may be redistributed obviously, and bundling them breaks on other Windows builds.
         PRE_EXCLUDE_REGEXES  "api-ms-" "ext-ms-" "^hvsifiletrust\\.dll$" "^pdmutilities\\.dll$"
         POST_EXCLUDE_REGEXES ".*[/\\\\][Ss]ystem32[/\\\\].*"
         DIRECTORIES ${APP_DEP_SEARCH_DIRS}

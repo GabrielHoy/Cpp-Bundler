@@ -34,7 +34,6 @@ Checks: >
 # Warnings from third-party headers generally aren't actionable, try to only 'diagnose' in-house code.
 HeaderFilterRegex: '^.*[/\\]src[/\\].*'
 
-# Editor diagnostics only. CI enforcement is opt-in; once codebase is clean this can be set from '' to '*'
 WarningsAsErrors: ''
 
 CheckOptions:
@@ -50,11 +49,17 @@ CheckOptions:
     value: CamelCase
   - key:   readability-identifier-naming.VariableCase
     value: camelBack
-#   - key:   readability-identifier-naming.PrivateMemberPrefix
-#     value: _
-#   - key:   readability-identifier-naming.PrivateMemberSuffix
-#     value: _
+  - key:   readability-identifier-naming.PrivateMemberCase
+    value: camelBack
   - key:   readability-identifier-naming.ConstantCase
     value: UPPER_CASE
+  - key:   readability-identifier-naming.LocalConstantCase
+    value: camelBack
+  - key:   readability-identifier-naming.LocalConstantPointerCase
+    value: camelBack
+  - key:   readability-identifier-naming.ConstantParameterCase
+    value: camelBack
+  - key:   readability-identifier-naming.ConstantMemberCase
+    value: camelBack
   - key:   readability-identifier-naming.MacroDefinitionCase
     value: UPPER_CASE
