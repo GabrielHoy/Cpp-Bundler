@@ -13,8 +13,8 @@ namespace Cpp_Bundler {
     /// print it verbatim rather than wrapping it in yet another layer of explanation.
     class Error : public std::runtime_error {
       public:
-        explicit Error(std::string message)
-            : std::runtime_error(std::move(message)) {
+        explicit Error(const std::string& message)
+            : std::runtime_error(message) {
         }
     };
 

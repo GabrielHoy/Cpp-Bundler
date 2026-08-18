@@ -4,6 +4,7 @@
 #include "paths.hpp"
 #include <algorithm>
 #include <argparse/argparse.hpp>
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <iostream>
@@ -44,7 +45,7 @@ namespace Cpp_Bundler {
         /// Used only to split argv (see `SplitCommandLine`); the parser itself is
         /// the authority on what exists. `test_cli.cpp` walks every option listed here to
         /// make sure the two never drift apart.
-        constexpr std::string_view VALUE_OPTIONS[]{
+        constexpr std::array<const char*, 14> VALUE_OPTIONS = {
             "-o",
             "--output",
             "-d",
@@ -275,6 +276,14 @@ namespace Cpp_Bundler {
             .help("Emit #line directives so compilers and debuggers can map lines back to their original files")
             .action([&options](const std::string&) { options.lineDirectives = true; });
 
+        program.add_argument("-l", "--list-includes")
+            .flag()
+            .help(
+                "List the files that would be bundled, as #include lines in bundling order, instead of "
+                "concatenating their contents"
+            )
+            .action([&options](const std::string&) { options.listIncludes = true; });
+
         program.add_argument("-v", "--verbose")
             .flag()
             .append()
@@ -321,6 +330,10 @@ namespace Cpp_Bundler {
         if (verbose > 0 && quiet > 0) {
             throw UsageError{"--verbose and --quiet cannot be combined."};
         }
+        if (options.listIncludes && options.lineDirectives) {
+            throw UsageError{"--list-includes and --line-directives cannot be combined: a list of files has no "
+                             "copied lines for a #line directive to point at."};
+        }
         if (unresolvable.has_value() && (unresolvableQuote.has_value() || unresolvableSystem.has_value())) {
             throw UsageError{"--unresolvable-include cannot be combined with its --…-quote-include or "
                              "--…-system-include variants."};
@@ -329,9 +342,9 @@ namespace Cpp_Bundler {
         // The shared option wins where it was given; otherwise the specific one applies,
         // and failing that includes that cannot be resolved are silently left alone.
         options.errorHandling.unresolvableQuoteInclude =
-            unresolvable.value_or(unresolvableQuote.value_or(ErrorHandling::Ignore));
+            unresolvable.value_or(unresolvableQuote.value_or(ErrorHandling::IGNORE));
         options.errorHandling.unresolvableSystemInclude =
-            unresolvable.value_or(unresolvableSystem.value_or(ErrorHandling::Ignore));
+            unresolvable.value_or(unresolvableSystem.value_or(ErrorHandling::IGNORE));
         options.logLevel = LevelForVerbosity(verbose - quiet);
 
         return options;

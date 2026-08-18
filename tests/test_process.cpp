@@ -1,12 +1,28 @@
 #include "error.hpp"
 #include "test_util.hpp"
 #include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 
 using Test_Util::CanonicalGeneric;
 using Test_Util::RunBundler;
 using Test_Util::TempTree;
+
+namespace {
+
+    /// The exact output `--list-includes` should produce for `paths`, in that order.
+    [[nodiscard]]
+    std::string Listing(std::initializer_list<std::filesystem::path> paths) {
+        std::string expected;
+        for (const std::filesystem::path& path : paths) {
+            expected += "#include \"" + CanonicalGeneric(path) + "\"\n";
+        }
+        return expected;
+    }
+
+} // namespace
 
 // === Resolving ===
 
@@ -468,4 +484,111 @@ TEST_CASE("file identity looks through symlinks", "[process][symlink]") {
 
     // Two names, one file: canonicalising before de-duplicating is what catches this.
     REQUIRE(RunBundler({tree.Path("src/main.cpp"), "-d", tree.Path("d")}) == "arst\n");
+}
+
+// === Listing ===
+
+TEST_CASE("list mode names the bundled files instead of copying them", "[process][list]") {
+    TempTree   tree;
+    const auto source = tree.Write("src/main.cpp", "arst\n#include <a.hpp>\nqwfp\n#include <b.hpp>\n");
+    const auto a      = tree.Write("d/a.hpp", "#include <c.hpp>\n// a.hpp\n");
+    const auto b      = tree.Write("d/b.hpp", "// b.hpp\n");
+    const auto c      = tree.Write("d/c.hpp", "// c.hpp\n");
+
+    const std::string output = RunBundler({tree.Path("src/main.cpp"), "-d", tree.Path("d"), "--list-includes"});
+
+    // Depth first, each file named where its contents would have begun: a is entered before
+    // b, and c before the rest of a. That is the order files are *entered*, which is not the
+    // byte order of the amalgamation -- there c's body precedes a's, because a's own
+    // #include comes before a's first line of content.
+    REQUIRE(output == Listing({source, a, c, b}));
+}
+
+TEST_CASE("list mode names a shared header once, where it first appears", "[process][list]") {
+    TempTree   tree;
+    const auto source = tree.Write("src/main.cpp", "#include <a.hpp>\n#include <b.hpp>\n");
+    const auto a      = tree.Write("d/a.hpp", "#include <shared.hpp>\n");
+    const auto b      = tree.Write("d/b.hpp", "#include <shared.hpp>\n");
+    const auto shared = tree.Write("d/shared.hpp", "// shared.hpp\n");
+
+    const std::string output = RunBundler({tree.Path("src/main.cpp"), "-d", tree.Path("d"), "--list-includes"});
+
+    // The once-only rule is the one the amalgamation already uses, so the list holds exactly
+    // the files the bundle would have contained -- no more.
+    REQUIRE(output == Listing({source, a, shared, b}));
+}
+
+TEST_CASE("list mode leaves out what would not have been bundled", "[process][list]") {
+    TempTree   tree;
+    const auto source = tree.Write("src/main.cpp", "#include <a.hpp>\n#include <nowhere.hpp>\n#include <b.hpp>\n");
+    const auto a      = tree.Write("d/a.hpp", "// a.hpp\n");
+    tree.Write("d/b.hpp", "// b.hpp\n");
+
+    // b.hpp is filtered out and nowhere.hpp cannot be resolved; neither reaches the bundle,
+    // so neither belongs in the list either.
+    const std::string output =
+        RunBundler({tree.Path("src/main.cpp"), "-d", tree.Path("d"), "--filter", "**/b.hpp", "--list-includes"});
+
+    REQUIRE(output == Listing({source, a}));
+}
+
+TEST_CASE("list mode names a cyclic header once", "[process][list]") {
+    TempTree   tree;
+    const auto source = tree.Write("src/main.cpp", "#include <a.hpp>\n");
+    const auto a      = tree.Write("d/a.hpp", "#include <b.hpp>\n");
+    const auto b      = tree.Write("d/b.hpp", "#include <a.hpp>\n");
+
+    // The re-entry is what the cycle policy governs. In the bundle it stays an #include
+    // line; in the list it is simply not a second entry.
+    const std::string output =
+        RunBundler({tree.Path("src/main.cpp"), "-d", tree.Path("d"), "--cyclic-include", "ignore", "--list-includes"});
+
+    REQUIRE(output == Listing({source, a, b}));
+}
+
+TEST_CASE("list mode covers every source file", "[process][list]") {
+    TempTree   tree;
+    const auto first  = tree.Write("src/first.cpp", "#include <a.hpp>\n");
+    const auto second = tree.Write("src/second.cpp", "// second.cpp\n");
+    const auto a      = tree.Write("d/a.hpp", "// a.hpp\n");
+
+    const std::string output =
+        RunBundler({tree.Path("src/first.cpp"), tree.Path("src/second.cpp"), "-d", tree.Path("d"), "--list-includes"});
+
+    REQUIRE(output == Listing({first, a, second}));
+}
+
+TEST_CASE("list mode does not repeat a source file already pulled in as a header", "[process][list]") {
+    TempTree   tree;
+    const auto source = tree.Write("src/main.cpp", "#include <a.hpp>\n");
+    const auto a      = tree.Write("d/a.hpp", "// a.hpp\n");
+
+    const std::string output =
+        RunBundler({tree.Path("src/main.cpp"), tree.Path("d/a.hpp"), "-d", tree.Path("d"), "--list-includes"});
+
+    REQUIRE(output == Listing({source, a}));
+}
+
+TEST_CASE("list mode still names a file that contributes no bytes", "[process][list]") {
+    TempTree   tree;
+    const auto source = tree.Write("src/main.cpp", "#include <empty.hpp>\n");
+    const auto empty  = tree.Write("d/empty.hpp", "");
+
+    // An empty header adds nothing to the amalgamation, but it was still bundled, and a
+    // dependency listing that quietly dropped it would be wrong.
+    const std::string output = RunBundler({tree.Path("src/main.cpp"), "-d", tree.Path("d"), "--list-includes"});
+
+    REQUIRE(output == Listing({source, empty}));
+}
+
+TEST_CASE("list mode spells paths the way a directive needs", "[process][list]") {
+    TempTree   tree;
+    const auto source = tree.Write("src/main.cpp", "// main.cpp\n");
+
+    const std::string output = RunBundler({tree.Path("src/main.cpp"), "--list-includes"});
+
+    // The same spelling #line directives use, so each line is valid C++ even on Windows,
+    // where the native separator would otherwise open an escape sequence.
+    REQUIRE(output == "#include \"" + CanonicalGeneric(source) + "\"\n");
+    REQUIRE(output.find('\\') == std::string::npos);
 }

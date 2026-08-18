@@ -17,9 +17,20 @@
 namespace Cpp_Bundler {
 
     struct ErrorHandlingOptions {
-        ErrorHandling cyclicInclude{ErrorHandling::Error};
-        ErrorHandling unresolvableQuoteInclude{ErrorHandling::Ignore};
-        ErrorHandling unresolvableSystemInclude{ErrorHandling::Ignore};
+        ErrorHandling cyclicInclude{ErrorHandling::ERROR};
+        ErrorHandling unresolvableQuoteInclude{ErrorHandling::IGNORE};
+        ErrorHandling unresolvableSystemInclude{ErrorHandling::IGNORE};
+    };
+
+    /// What a `Processor` writes for each file it decides to bundle.
+    enum class OutputMode : std::uint8_t {
+        /// The files themselves, concatenated: the amalgamation.
+        AMALGAMATE,
+        /// One `#include` line naming each file instead of its contents, in the order those
+        /// contents would have appeared. The walk is identical either way -- resolution,
+        /// filtering and the once-only rule all still apply -- only the writing differs.
+        LIST_INCLUDES,
+
     };
 
     /// Walks source files and the headers they include, writing one amalgamated stream.
@@ -33,13 +44,23 @@ namespace Cpp_Bundler {
     /// command line share a single set of already-included headers.
     class Processor {
       public:
+        /// `lineDirectives` is ignored under `OutputMode::LIST_INCLUDES`: nothing is copied
+        /// there, so there are no output lines for a `#line` directive to remap.
         Processor(
             std::ostream&        output,
             IncludeResolver      includeResolver,
             InliningFilter       inliningFilter,
+            OutputMode           outputMode,
             bool                 lineDirectives,
             ErrorHandlingOptions handling
         );
+
+        ~Processor() = default;
+
+        Processor(const Processor&)            = delete;
+        Processor& operator=(const Processor&) = delete;
+        Processor(Processor&&)                 = delete;
+        Processor& operator=(Processor&&)      = delete;
 
         /// @throws Error on I/O failure, or on a condition the user asked to treat as fatal.
         void Process(const std::filesystem::path& sourceFile);
@@ -47,10 +68,10 @@ namespace Cpp_Bundler {
       private:
         static constexpr std::size_t NO_FILE = std::numeric_limits<std::size_t>::max();
 
-        enum class IncludeAction {
-            Inline, ///< expand the header here, and drop the `#include` line
-            Remove, ///< already emitted elsewhere: drop the `#include` line
-            Leave,  ///< keep the `#include` line exactly as written
+        enum class IncludeAction : std::uint8_t {
+            INLINE, ///< expand the header here, and drop the `#include` line
+            REMOVE, ///< already emitted elsewhere: drop the `#include` line
+            LEAVE,  ///< keep the `#include` line exactly as written
         };
 
         struct FileState {
@@ -81,6 +102,7 @@ namespace Cpp_Bundler {
         [[nodiscard]]
         IncludeAction PushToStack(std::filesystem::path canonicalPath);
         void          ProcessRecursively();
+        void          OutputIncludeLine(const std::filesystem::path& path);
         [[nodiscard]]
         bool ProcessLine(std::istream& in, std::string& line, const std::filesystem::path& currentDir);
         [[nodiscard]]
@@ -92,6 +114,7 @@ namespace Cpp_Bundler {
         std::ostream&        out;
         IncludeResolver      resolver;
         InliningFilter       filter;
+        OutputMode           mode;
         ErrorHandlingOptions errorHandling;
 
         /// Every file seen so far. Indices are stable; references are not, because this

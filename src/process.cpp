@@ -9,6 +9,7 @@
 
 namespace Cpp_Bundler {
 
+    // NOLINTNEXTLINE(readability-identifier-naming)
     namespace fs = std::filesystem;
 
     namespace {
@@ -32,12 +33,13 @@ namespace Cpp_Bundler {
             return true;
         }
 
-        /// Escapes a path for the inside of a `#line "…"` directive.
+        /// Escapes a path for the inside of a directive's `"…"`, as `#line` and the
+        /// `#include` lines of list mode both need.
         ///
         /// `Paths::ToGeneric` already removes backslashes on Windows; this covers the
         /// genuinely odd names a POSIX filesystem will happily accept.
         [[nodiscard]]
-        std::string EscapeForLineDirective(const fs::path& path) {
+        std::string EscapeForDirective(const fs::path& path) {
             const std::string text = Paths::ToGeneric(path);
             std::string       escaped;
             escaped.reserve(text.size());
@@ -56,14 +58,19 @@ namespace Cpp_Bundler {
         std::ostream&        output,
         IncludeResolver      includeResolver,
         InliningFilter       inliningFilter,
+        OutputMode           outputMode,
         bool                 lineDirectives,
         ErrorHandlingOptions handling
     )
         : out(output)
         , resolver(std::move(includeResolver))
         , filter(std::move(inliningFilter))
+        , mode(outputMode)
         , errorHandling(handling) {
-        if (lineDirectives) {
+        // List mode copies no lines, so leaving this disengaged is what keeps the two
+        // options from contradicting each other. The command line rejects the combination
+        // outright; this only makes the class true to its own contract.
+        if (lineDirectives && mode == OutputMode::AMALGAMATE) {
             // Deliberately not a real position, so the very first copied line disagrees
             // with it and emits a directive.
             expectedLine = LineRef{};
@@ -92,22 +99,41 @@ namespace Cpp_Bundler {
             files.push_back(FileState{entry->first, tail, 0, true});
             spdlog::info("Processing {}", DebugFileName(entry->first));
             tail = entry->second;
-            return IncludeAction::Inline;
+
+            // This is precisely where the file's first byte would go, so writing its name
+            // here is what makes the list come out in amalgamation order -- and only the
+            // `inserted` branch reaches it, so each file is named exactly once.
+            if (mode == OutputMode::LIST_INCLUDES) {
+                OutputIncludeLine(entry->first);
+            }
+            return IncludeAction::INLINE;
         }
 
         const std::size_t index = entry->second;
         if (!files[index].inStack) {
             spdlog::debug("Skipping {}, already included", DebugFileName(entry->first));
-            return IncludeAction::Remove;
+            return IncludeAction::REMOVE;
         }
 
         // Still on the stack, so following it again would not terminate. Leaving the
         // `#include` in place is the only option that keeps the output well-formed.
         HandleProblem(errorHandling.cyclicInclude, "{}", DescribeCycle(index));
-        return IncludeAction::Leave;
+        return IncludeAction::LEAVE;
+    }
+
+    void Processor::OutputIncludeLine(const fs::path& path) {
+        out << "#include \"" << EscapeForDirective(path) << "\"\n";
+        if (!out) {
+            Fail("Failed writing to output");
+        }
     }
 
     void Processor::OutputCopiedLine(std::string_view line) {
+        // List mode names files instead of copying them, and PushToStack does the naming.
+        if (mode == OutputMode::LIST_INCLUDES) {
+            return;
+        }
+
         if (expectedLine.has_value()) {
             const FileState& current = files[tail];
             const LineRef    here{tail, current.lineNumber};
@@ -115,7 +141,7 @@ namespace Cpp_Bundler {
             // A jump happens whenever the previous output line came from somewhere else:
             // a header was just expanded, or a `#pragma once`/`#include` line was dropped.
             if (here != *expectedLine) {
-                out << "#line " << here.number << " \"" << EscapeForLineDirective(current.canonicalPath) << "\"\n";
+                out << "#line " << here.number << " \"" << EscapeForDirective(current.canonicalPath) << "\"\n";
                 *expectedLine = here;
             }
             expectedLine->number += 1;
@@ -162,12 +188,12 @@ namespace Cpp_Bundler {
         }
 
         switch (PushToStack(std::move(*resolved))) {
-            case IncludeAction::Inline:
+            case IncludeAction::INLINE:
                 ProcessRecursively();
                 return false;
-            case IncludeAction::Remove:
+            case IncludeAction::REMOVE:
                 return false;
-            case IncludeAction::Leave:
+            case IncludeAction::LEAVE:
                 return true;
         }
         return true;
@@ -236,7 +262,7 @@ namespace Cpp_Bundler {
 
         // Between source files the stack is empty, so a repeated source file can only come
         // back as Remove -- never as a cycle.
-        if (PushToStack(std::move(canonicalPath)) == IncludeAction::Inline) {
+        if (PushToStack(std::move(canonicalPath)) == IncludeAction::INLINE) {
             ProcessRecursively();
         }
     }

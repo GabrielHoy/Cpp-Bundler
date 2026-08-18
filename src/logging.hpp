@@ -12,7 +12,7 @@
 namespace Cpp_Bundler {
 
     /// What to do about a condition the user may or may not consider fatal.
-    enum class ErrorHandling { Error, Warn, Ignore };
+    enum class ErrorHandling : std::uint8_t { ERROR, WARN, IGNORE };
 
     inline constexpr std::array<std::string_view, 3> ERROR_HANDLING_NAMES{"error", "warn", "ignore"};
 
@@ -40,18 +40,18 @@ namespace Cpp_Bundler {
     void HandleProblem(ErrorHandling handling, fmt::format_string<Args...> format, Args&&... args) {
         // Ignoring is the default for unresolvable includes and can therefore be hit for
         // every single include in a large tree; don't pay to format a message nobody reads.
-        if (handling == ErrorHandling::Ignore && !spdlog::should_log(spdlog::level::debug)) {
+        if (handling == ErrorHandling::IGNORE && !spdlog::should_log(spdlog::level::debug)) {
             return;
         }
 
         std::string message = fmt::format(format, std::forward<Args>(args)...);
         switch (handling) {
-            case ErrorHandling::Error:
-                throw Error{std::move(message)};
-            case ErrorHandling::Warn:
+            case ErrorHandling::ERROR:
+                throw Error{message};
+            case ErrorHandling::WARN:
                 spdlog::warn("{}", message);
                 break;
-            case ErrorHandling::Ignore:
+            case ErrorHandling::IGNORE:
                 spdlog::debug("Ignoring: {}", message);
                 break;
         }

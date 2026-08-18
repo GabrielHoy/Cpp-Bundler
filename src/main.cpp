@@ -75,6 +75,7 @@ namespace {
             out,
             IncludeResolver{options.quoteSearchDirs, options.systemSearchDirs},
             InliningFilter{options.quoteFilters, options.systemFilters},
+            options.listIncludes ? OutputMode::LIST_INCLUDES : OutputMode::AMALGAMATE,
             options.lineDirectives,
             options.errorHandling
         };

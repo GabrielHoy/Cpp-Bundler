@@ -15,7 +15,7 @@
 
 namespace Test_Util {
 
-    namespace fs = std::filesystem;
+    namespace Files = std::filesystem;
 
     namespace {
 
@@ -32,7 +32,7 @@ namespace Test_Util {
         /// Test binaries can run several cases in one process, and CTest can run several
         /// binaries at once, so the name has to be unique on both axes.
         [[nodiscard]]
-        fs::path UniqueRoot() {
+        Files::path UniqueRoot() {
             static std::atomic<unsigned> counter{0};
             const unsigned               ordinal = counter.fetch_add(1);
 
@@ -40,27 +40,27 @@ namespace Test_Util {
             name << "cpp-bundler-test-"
                  << static_cast<unsigned long long>(std::chrono::steady_clock::now().time_since_epoch().count()) << '-'
                  << ordinal;
-            return fs::temp_directory_path() / name.str();
+            return Files::temp_directory_path() / name.str();
         }
 
     } // namespace
 
     TempTree::TempTree()
         : root(UniqueRoot()) {
-        fs::create_directories(root);
+        Files::create_directories(root);
         // Canonical from the start: on macOS /tmp is itself a symlink, and a test comparing
         // a #line directive against Root() would otherwise never match.
-        root = fs::canonical(root);
+        root = Files::canonical(root);
     }
 
     TempTree::~TempTree() {
         std::error_code ec;
-        fs::remove_all(root, ec); // a destructor is no place to throw
+        Files::remove_all(root, ec); // a destructor is no place to throw
     }
 
-    fs::path TempTree::Write(std::string_view relative, std::string_view content) const {
-        const fs::path target = root / fs::path{relative};
-        fs::create_directories(target.parent_path());
+    Files::path TempTree::Write(std::string_view relative, std::string_view content) const {
+        const Files::path target = root / Files::path{relative};
+        Files::create_directories(target.parent_path());
 
         std::ofstream out(target, std::ios::binary);
         if (!out) {
@@ -70,31 +70,31 @@ namespace Test_Util {
         return target;
     }
 
-    fs::path TempTree::MakeDir(std::string_view relative) const {
-        const fs::path target = root / fs::path{relative};
-        fs::create_directories(target);
+    Files::path TempTree::MakeDir(std::string_view relative) const {
+        const Files::path target = root / Files::path{relative};
+        Files::create_directories(target);
         return target;
     }
 
-    bool TempTree::TrySymlink(std::string_view link, const fs::path& target) const {
-        const fs::path linkPath = root / fs::path{link};
-        fs::create_directories(linkPath.parent_path());
+    bool TempTree::TrySymlink(std::string_view link, const Files::path& target) const {
+        const Files::path linkPath = root / Files::path{link};
+        Files::create_directories(linkPath.parent_path());
 
         std::error_code ec;
-        fs::create_symlink(target, linkPath, ec);
+        Files::create_symlink(target, linkPath, ec);
         return !ec;
     }
 
     std::string TempTree::Path(std::string_view relative) const {
-        return Cpp_Bundler::Paths::ToUtf8(root / fs::path{relative});
+        return Cpp_Bundler::Paths::ToUtf8(root / Files::path{relative});
     }
 
     std::string TempTree::RootPath() const {
         return Cpp_Bundler::Paths::ToUtf8(root);
     }
 
-    std::string CanonicalGeneric(const fs::path& path) {
-        return Cpp_Bundler::Paths::ToGeneric(fs::canonical(path));
+    std::string CanonicalGeneric(const Files::path& path) {
+        return Cpp_Bundler::Paths::ToGeneric(Files::canonical(path));
     }
 
     std::string RunBundler(std::vector<std::string> arguments) {
@@ -111,11 +111,12 @@ namespace Test_Util {
             out,
             IncludeResolver{options->quoteSearchDirs, options->systemSearchDirs},
             InliningFilter{options->quoteFilters, options->systemFilters},
+            options->listIncludes ? OutputMode::LIST_INCLUDES : OutputMode::AMALGAMATE,
             options->lineDirectives,
             options->errorHandling
         };
 
-        for (const fs::path& sourceFile : options->sourceFiles) {
+        for (const Files::path& sourceFile : options->sourceFiles) {
             processor.Process(sourceFile);
         }
         return out.str();

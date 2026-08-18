@@ -7,13 +7,13 @@ namespace Cpp_Bundler {
 
     std::optional<ErrorHandling> ParseErrorHandling(std::string_view name) noexcept {
         if (name == ERROR_HANDLING_NAMES[0]) {
-            return ErrorHandling::Error;
+            return ErrorHandling::ERROR;
         }
         if (name == ERROR_HANDLING_NAMES[1]) {
-            return ErrorHandling::Warn;
+            return ErrorHandling::WARN;
         }
         if (name == ERROR_HANDLING_NAMES[2]) {
-            return ErrorHandling::Ignore;
+            return ErrorHandling::IGNORE;
         }
         return std::nullopt;
     }

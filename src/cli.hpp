@@ -26,6 +26,8 @@ namespace Cpp_Bundler {
         std::vector<InvertibleGlob>          systemFilters;
         ErrorHandlingOptions                 errorHandling;
         bool                                 lineDirectives{false};
+        /// Write the bundle's file list rather than the bundle itself.
+        bool                                 listIncludes{false};
         spdlog::level::level_enum            logLevel{spdlog::level::warn};
     };
 

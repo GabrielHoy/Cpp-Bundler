@@ -16,6 +16,9 @@ cpp-bundler src/main.cpp -d include -d /usr/include --filter '/usr/include/**'
 
 # Keep line numbers debuggable, outputting #line directives in the bundled code
 cpp-bundler src/main.cpp -d include --line-directives -o bundle.cpp
+
+# Don't bundle anything: just list which files a bundle would have been built from
+cpp-bundler src/main.cpp -d include --list-includes
 ```
 
 ### How do we decide what to inline?
@@ -42,10 +45,39 @@ compilers warn about one in a non-header.
 | `-f`, `--filter <glob>` | Exclude matching headers from inlining; `!` re-includes |
 | `--filter-quote`, `--filter-system <glob>` | As `--filter`, for one include form only |
 | `--line-directives` | Emit `#line` directives mapping output back to the originals |
+| `-l`, `--list-includes` | List the files that *would* be bundled instead of bundling them |
 | `--unresolvable-include <handling>` | `error`, `warn`, or `ignore` (default) |
 | `--unresolvable-quote-include`, `--unresolvable-system-include` | As above, per include form |
 | `--cyclic-include <handling>` | `error` (default), `warn`, or `ignore` |
 | `-v`, `--verbose` / `-q`, `--quiet` | Repeatable; warnings and errors are the baseline |
+
+### Listing instead of bundling
+
+`--list-includes` (`-l`) runs the exact same walk — the same search directories, the same
+filters, the same once-only rule, the same error policies — but writes one `#include` line
+naming each file rather than that file's contents:
+
+```shell
+$ cpp-bundler src/main.cpp -d src --list-includes
+#include "/home/you/proj/src/main.cpp"
+#include "/home/you/proj/src/cli.hpp"
+#include "/home/you/proj/src/filter.hpp"
+#include "/home/you/proj/src/glob.hpp"
+```
+
+Paths are canonical and spelled with forward slashes, the same way `#line` directives spell
+them, so every line is valid C++ on every platform. Anything that would not have reached the
+bundle — a filtered header, an unresolvable include, a cycle's second visit — is absent, and
+a header pulled in from two places is named once, where it first appears.
+
+The order is the order files are **entered**, which is the order their contents *begin* in
+the bundle. That is not quite the byte order of the amalgamation: a header is listed before
+the headers it itself includes, whereas in the bundle those nested contents are emitted first
+because the `#include` line comes before the rest of the file. Think of it as the include
+tree flattened depth-first, not a topological sort of dependencies.
+
+Because a bundle has no lines to map back, `--list-includes` cannot be combined with
+`--line-directives`. Everything else, including `-o`, works as usual.
 
 ### Filtering
 

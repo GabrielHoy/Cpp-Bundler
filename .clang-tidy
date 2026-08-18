@@ -29,7 +29,8 @@ Checks: >
   -modernize-use-trailing-return-type,
   -readability-identifier-length,
   -readability-magic-numbers,
-  -portability-avoid-pragma-once
+  -portability-avoid-pragma-once,
+  -misc-no-recursion
 
 # Warnings from third-party headers generally aren't actionable, try to only 'diagnose' in-house code.
 HeaderFilterRegex: '^.*[/\\]src[/\\].*'

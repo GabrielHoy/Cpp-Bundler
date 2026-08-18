@@ -84,19 +84,19 @@ TEST_CASE("verbosity is the balance of -v and -q", "[cli]") {
 
 TEST_CASE("unresolvable-include policies default and fall back correctly", "[cli]") {
     const Options bare = Parse({"main.cpp"});
-    REQUIRE(bare.errorHandling.unresolvableQuoteInclude == ErrorHandling::Ignore);
-    REQUIRE(bare.errorHandling.unresolvableSystemInclude == ErrorHandling::Ignore);
-    REQUIRE(bare.errorHandling.cyclicInclude == ErrorHandling::Error);
+    REQUIRE(bare.errorHandling.unresolvableQuoteInclude == ErrorHandling::IGNORE);
+    REQUIRE(bare.errorHandling.unresolvableSystemInclude == ErrorHandling::IGNORE);
+    REQUIRE(bare.errorHandling.cyclicInclude == ErrorHandling::ERROR);
 
     const Options shared = Parse({"--unresolvable-include", "warn", "main.cpp"});
-    REQUIRE(shared.errorHandling.unresolvableQuoteInclude == ErrorHandling::Warn);
-    REQUIRE(shared.errorHandling.unresolvableSystemInclude == ErrorHandling::Warn);
+    REQUIRE(shared.errorHandling.unresolvableQuoteInclude == ErrorHandling::WARN);
+    REQUIRE(shared.errorHandling.unresolvableSystemInclude == ErrorHandling::WARN);
 
     const Options specific = Parse({"--unresolvable-quote-include", "error", "main.cpp"});
-    REQUIRE(specific.errorHandling.unresolvableQuoteInclude == ErrorHandling::Error);
-    REQUIRE(specific.errorHandling.unresolvableSystemInclude == ErrorHandling::Ignore);
+    REQUIRE(specific.errorHandling.unresolvableQuoteInclude == ErrorHandling::ERROR);
+    REQUIRE(specific.errorHandling.unresolvableSystemInclude == ErrorHandling::IGNORE);
 
-    REQUIRE(Parse({"--cyclic-include", "ignore", "main.cpp"}).errorHandling.cyclicInclude == ErrorHandling::Ignore);
+    REQUIRE(Parse({"--cyclic-include", "ignore", "main.cpp"}).errorHandling.cyclicInclude == ErrorHandling::IGNORE);
 }
 
 TEST_CASE("mutually exclusive options are rejected", "[cli]") {
@@ -110,10 +110,23 @@ TEST_CASE("mutually exclusive options are rejected", "[cli]") {
         Cpp_Bundler::UsageError
     );
 
+    // A listing copies no lines, so there is nothing for a #line directive to remap.
+    REQUIRE_THROWS_AS(Parse({"--list-includes", "--line-directives", "main.cpp"}), Cpp_Bundler::UsageError);
+
     // The two specific ones are independent, so using both together is fine.
     REQUIRE_NOTHROW(
         Parse({"--unresolvable-quote-include", "warn", "--unresolvable-system-include", "error", "main.cpp"})
     );
+}
+
+TEST_CASE("the list-includes flag is off unless asked for, under either spelling", "[cli]") {
+    REQUIRE_FALSE(Parse({"main.cpp"}).listIncludes);
+    REQUIRE(Parse({"--list-includes", "main.cpp"}).listIncludes);
+    REQUIRE(Parse({"-l", "main.cpp"}).listIncludes);
+
+    // A flag takes no value, so the argv regrouping must not let it swallow the file after
+    // it -- which is exactly what keeping it out of VALUE_OPTIONS buys.
+    REQUIRE(Names(Parse({"-l", "main.cpp"}).sourceFiles) == std::vector<std::string>{"main.cpp"});
 }
 
 TEST_CASE("bad option values are rejected with a useful message", "[cli]") {
@@ -148,7 +161,7 @@ TEST_CASE("the --option=value form is understood", "[cli]") {
     REQUIRE(options.outputFile->generic_string() == "out.cpp");
 }
 
-TEST_CASE("--help and --version are served without running anything", "[cli]") {
+TEST_CASE("the --help and --version flags are served without running anything", "[cli]") {
     std::ostringstream    captured;
     std::streambuf* const original = std::cout.rdbuf(captured.rdbuf());
 

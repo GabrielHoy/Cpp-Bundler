@@ -8,18 +8,18 @@
 
 namespace Cpp_Bundler {
 
-    namespace fs = std::filesystem;
+    namespace Fs = std::filesystem;
 
     namespace {
 
         [[nodiscard]]
-        std::vector<fs::path> CanonicalizeAll(const std::vector<fs::path>& dirs) {
-            std::vector<fs::path> canonical;
+        std::vector<Fs::path> CanonicalizeAll(const std::vector<Fs::path>& dirs) {
+            std::vector<Fs::path> canonical;
             canonical.reserve(dirs.size());
 
-            for (const fs::path& dir : dirs) {
+            for (const Fs::path& dir : dirs) {
                 std::error_code ec;
-                fs::path        resolved = fs::canonical(dir, ec);
+                Fs::path        resolved = Fs::canonical(dir, ec);
                 if (ec) {
                     Fail("Failed to canonicalize search path \"{}\": {}", Paths::ToUtf8(dir), ec.message());
                 }
@@ -34,20 +34,20 @@ namespace Cpp_Bundler {
         }
 
         [[nodiscard]]
-        std::optional<fs::path>
-        TryDirectory(const fs::path& dir, const fs::path& target, std::string_view description) {
-            fs::path candidate = dir / target;
+        std::optional<Fs::path>
+        TryDirectory(const Fs::path& dir, const Fs::path& target, std::string_view description) {
+            Fs::path candidate = dir / target;
             spdlog::trace("Trying to resolve {} to {}", description, Paths::ToUtf8(candidate));
 
             std::error_code       ec;
-            const fs::file_status status = fs::status(candidate, ec);
+            const Fs::file_status status = Fs::status(candidate, ec);
             // status() follows links, so a symlink pointing at a real header resolves,
             // while a directory that happens to share the name does not.
-            if (ec || !fs::exists(status) || fs::is_directory(status)) {
+            if (ec || !Fs::exists(status) || Fs::is_directory(status)) {
                 return std::nullopt;
             }
 
-            fs::path canonical = fs::canonical(candidate, ec);
+            Fs::path canonical = Fs::canonical(candidate, ec);
             if (ec) {
                 Fail("Failed to canonicalize path to include \"{}\": {}", Paths::ToUtf8(candidate), ec.message());
             }
@@ -55,20 +55,20 @@ namespace Cpp_Bundler {
         }
 
         [[nodiscard]]
-        std::optional<fs::path>
-        ResolveIn(std::string_view target, const fs::path* currentDir, const std::vector<fs::path>& searchDirs) {
+        std::optional<Fs::path>
+        ResolveIn(std::string_view target, const Fs::path* currentDir, const std::vector<Fs::path>& searchDirs) {
             const std::string description = DescribeInclude(target, currentDir != nullptr);
-            const fs::path    relative    = Paths::FromUtf8(target);
+            const Fs::path    relative    = Paths::FromUtf8(target);
 
             if (currentDir != nullptr) {
-                if (std::optional<fs::path> resolved = TryDirectory(*currentDir, relative, description)) {
+                if (std::optional<Fs::path> resolved = TryDirectory(*currentDir, relative, description)) {
                     spdlog::debug("Resolved {} to {}", description, Paths::ToUtf8(*resolved));
                     return resolved;
                 }
             }
 
-            for (const fs::path& dir : searchDirs) {
-                if (std::optional<fs::path> resolved = TryDirectory(dir, relative, description)) {
+            for (const Fs::path& dir : searchDirs) {
+                if (std::optional<Fs::path> resolved = TryDirectory(dir, relative, description)) {
                     spdlog::debug("Resolved {} to {}", description, Paths::ToUtf8(*resolved));
                     return resolved;
                 }
@@ -80,24 +80,24 @@ namespace Cpp_Bundler {
 
     } // namespace
 
-    IncludeResolver::IncludeResolver(const std::vector<fs::path>& quoteDirs, const std::vector<fs::path>& systemDirs)
+    IncludeResolver::IncludeResolver(const std::vector<Fs::path>& quoteDirs, const std::vector<Fs::path>& systemDirs)
         : quoteSearchDirs(CanonicalizeAll(quoteDirs))
         , systemSearchDirs(CanonicalizeAll(systemDirs)) {
         if (spdlog::should_log(spdlog::level::debug)) {
-            for (const fs::path& dir : quoteSearchDirs) {
+            for (const Fs::path& dir : quoteSearchDirs) {
                 spdlog::debug("Quote search dir: {}", Paths::ToUtf8(dir));
             }
-            for (const fs::path& dir : systemSearchDirs) {
+            for (const Fs::path& dir : systemSearchDirs) {
                 spdlog::debug("System search dir: {}", Paths::ToUtf8(dir));
             }
         }
     }
 
-    std::optional<fs::path> IncludeResolver::ResolveQuote(std::string_view target, const fs::path& currentDir) const {
+    std::optional<Fs::path> IncludeResolver::ResolveQuote(std::string_view target, const Fs::path& currentDir) const {
         return ResolveIn(target, &currentDir, quoteSearchDirs);
     }
 
-    std::optional<fs::path> IncludeResolver::ResolveSystem(std::string_view target) const {
+    std::optional<Fs::path> IncludeResolver::ResolveSystem(std::string_view target) const {
         return ResolveIn(target, nullptr, systemSearchDirs);
     }
 
